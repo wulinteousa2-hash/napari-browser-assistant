@@ -1,0 +1,24 @@
+name: napari-browser-assistant
+display_name: Browser Assistant
+description: Browse image libraries with folder navigation, cached thumbnails, and a metadata table.
+visibility: public
+categories:
+  - Utilities
+contributions:
+  commands:
+    - id: napari-browser-assistant.make_widget
+      title: Browser Assistant
+      python_name: napari_browser_assistant._widget:BrowserAssistantWidget
+    - id: napari-browser-assistant.get_reader
+      title: Read OME-Zarr or Label Assistant workspace images
+      python_name: napari_browser_assistant._reader:napari_get_reader
+  readers:
+    - command: napari-browser-assistant.get_reader
+      accepts_directories: true
+      filename_patterns:
+        - "*.zarr"
+        - "*.ome.zarr"
+        - "*.json"
+  widgets:
+    - command: napari-browser-assistant.make_widget
+      display_name: Browser Assistant

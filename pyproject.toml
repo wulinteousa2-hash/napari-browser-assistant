@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "napari-browser-assistant"
+version = "1.0.0"
+description = "Search and browse image libraries in napari with mask pairing, cached galleries, and lazy OME-Zarr workspace I/O."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "Wulin Teo" }
+]
+dependencies = [
+  "napari",
+  "numpy",
+  "qtpy",
+  "tifffile",
+  "Pillow>=10",
+]
+keywords = ["napari", "tiff", "thumbnail", "browser", "microscopy"]
+classifiers = [
+  "Framework :: napari",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Image Processing",
+]
+
+[project.optional-dependencies]
+ome-zarr = ["zarr>=3; python_version >= '3.11'", "zarr>=2.16,<3; python_version < '3.11'"]
+test = ["pytest"]
+
+[project.urls]
+Homepage = "https://github.com/wulinteousa2-hash/napari-browser-assistant"
+Repository = "https://github.com/wulinteousa2-hash/napari-browser-assistant"
+Issues = "https://github.com/wulinteousa2-hash/napari-browser-assistant/issues"
+
+[project.entry-points."napari.manifest"]
+napari-browser-assistant = "napari_browser_assistant:napari.yaml"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+napari_browser_assistant = ["napari.yaml"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
