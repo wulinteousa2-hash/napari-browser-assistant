@@ -1,9 +1,15 @@
 # napari-browser-assistant
 
-**Version 1.0.0** · [Changelog](CHANGELOG.md) · [MIT license](LICENSE)
+**Latest release: 1.0.1** · [Changelog](CHANGELOG.md) · [MIT license](LICENSE)
 
-An image library inside napari, combining a gallery, metadata table, persistent
-filename/path search, and visible-first cached thumbnails.
+An image library inside napari with three connected tabs: **Library** for browsing
+and filename/path search, **Discover** for saved studies and region similarity
+search, and **Metadata** for local OCR extraction and review.
+
+**Version 1.0.1** adds Discover, reviewed dataset export, and Tesseract OCR saved
+in the active study. It also supports read-only mapped crops from large compatible
+TIFFs and remembers separate checkpoint paths for ResNet18 and EM-DINO.
+See the [Discover guide](docs/DISCOVER.md) and the Metadata workflow below.
 
 ## Install and launch
 
@@ -131,10 +137,26 @@ the existing search, format filters, thumbnail controls, and shared selection.
 
 Semantic class IDs and instance IDs both receive categorical previews; the browser
 does not infer which annotation convention you use. This initial mask workflow
-covers discovery, pairing, browsing, and opening. Training approval status,
-train/validation/test splits, export manifests, and gallery overlay previews are
-not implemented yet. Editing/saving Labels uses napari; the browser itself never
+covers discovery, pairing, browsing, and opening. Discover provides separate region-review decisions, specimen-group splits, and
+crop/pair export manifests. Pixel-mask training approvals and gallery overlay
+previews are not implemented. Editing/saving Labels uses napari; the browser itself never
 rewrites your source images or masks.
+
+## Discover studies
+
+Open **Discover** beside **Library**, create a study, add the Library's image
+entries, and prepare region embeddings. Draw a query rectangle in napari, find
+similar regions, review the results, and save explicit dataset selections.
+
+The built-in texture baseline works without model downloads. Optional local
+ResNet18 and EM-DINO encoders provide learned features. Biological classes are
+separate from relevance reviews and require human confirmation for classification
+export. This workflow exports trainer-neutral crops and reviewed pairs; it does
+not train a model automatically.
+
+Studies autosave as versioned JSON and reopen with searches, annotations, and
+selections. Vectors are rebuildable cache data. See the
+[full workflow and study format](docs/DISCOVER.md).
 
 ## Format capabilities
 
@@ -202,3 +224,89 @@ label-color preservation, and real napari Image/Labels opening.
 
 Reader tests cover NGFF 0.4/0.5, JSON/companion discovery, lazy arrays, read-only
 annotations, missing references, internal array-path validation, and registered napari I/O.
+
+### Metadata: local OCR of printed acquisition information
+
+Open or create a study in **Discover**, add Library images, then open the
+**Metadata** tab. It shares that study and saves OCR records in its existing
+`.browser-analysis.json` document. Original images are never modified. File
+metadata is read-only and displayed separately from printed acquisition fields;
+printed calibration never replaces file-derived pixel calibration.
+
+Install **Tesseract** and its English language data separately and put the
+`tesseract` executable on PATH. On Ubuntu/Debian use
+`sudo apt install tesseract-ocr`; on macOS use `brew install tesseract`.
+On Windows, install Tesseract with English data and add its installation folder
+to PATH. The app uses only this local executable, with no cloud service or
+automatic model downloads. Missing installations produce guidance in the tab.
+
+1. Select an image and use **Preview image** to see its saved representative
+   plane. File metadata includes the source path, shape, axes, revision and any
+   available file calibration.
+2. Choose **Bottom 25% (footer)** or **Full image**, then **Extract selected** or
+   **Extract all**. Progress and cancellation appear in Metadata and Discover.
+   Discover study operations are disabled during OCR. Cancelling stops the current
+   executable and saves already completed images; individual image failures are
+   reported while the remaining batch continues.
+3. Review original OCR text, word confidence/bounds and provenance. Correct the
+   text and the printed acquisition fields (a JSON object with text values),
+   check **Reviewed by user** when verified, and select **Save corrections to
+   study**. Parsing recognizes calibration, scale bars, voltage, magnification,
+   camera, exposure, acquisition date/time and TEM mode when labels/units are
+   recognizable. All parsed values start unverified; unrecognized text remains
+   in the original output. Editing text does not automatically replace fields.
+4. Unchanged images with the same scope/settings and engine version are cached.
+   **Re-extract explicitly** adds another generation. Use the generation selector
+   to revisit previous OCR and corrections; reviewed corrections are retained.
+
+Unsaved correction drafts survive image, generation and study navigation in the
+current widget. Save them before closing the widget/application; drafts are not
+persisted across restarts. Saves use Discover's atomic persistence and reject
+external changes to the study file. If an OCR save encounters a disk conflict,
+its completed result is retained in memory as `discover._unsaved_ocr_result` for
+recovery; reopen the on-disk study before attempting further changes.
+
+OCR uses the saved representative plane, English language data
+and sparse-text segmentation. Word boxes are `[x, y, width, height]` in source
+level-0 coordinates, including the footer offset. Existing Discover read limits
+apply (4 million samples per region and 128 MiB decode/chunk budget).
+**Resize large OCR regions to the memory budget** is enabled by default. Large
+regions are read in bounded tiles and resized into an OCR image within the sample
+budget; original files are unchanged. This can reduce small-text detail, so prefer
+footer mode for footer text. Word boxes are mapped back to original source
+coordinates, and the input dimensions and scale are recorded. Uncheck this option
+to require native-resolution OCR. Preview also uses bounded resizing. Uncompressed, memory-mappable TIFFs use read-only mapped crops. Sources that
+exceed the decode budget (including oversized individual chunks) still fail safely;
+convert those to a tiled pyramid/OME-Zarr copy before adding that copy to the study. Re-add changed source images through Discover before extracting
+again. Source revision caching uses the existing metadata/stat fingerprint, not
+a full pixel-content hash (changes inside Zarr chunks may not invalidate it).
+OCR quality and field parsing depend on image legibility and printed formatting;
+review every scientific value. Discover embedding crops are unchanged.
+
+
+### Discover preparation and model behavior
+
+**Max regions** is the total crop budget across the study. It must be at least
+the number of study images, with a current maximum of 10,000. For example, a study
+with 544 images needs at least 544 regions; choose 1024 or more for broader
+coverage. Tile size is 16–2048 pixels at the selected pyramid level. Level 0
+uses original resolution; higher levels require an existing source pyramid.
+Preparation can succeed partially: unreadable images are reported and skipped.
+
+After preparation, open an image, draw a query rectangle, and click **Find similar
+regions**. Results appear as thumbnails below **Saved search**. Click a thumbnail
+to open and outline its source region. Searching uses the encoder/checkpoint of
+the selected prepared run, rather than a newly selected encoder awaiting preparation.
+
+EM-DINO requires `omniem` and the separately downloaded compatible
+`backbone_emdino_v1.pt`. A ResNet18 checkpoint cannot be used for EM-DINO.
+Place the backbone under `models/emdino/` in Browser Assistant's persistent data
+directory for automatic detection, or use **Choose…**. Checkpoint paths are saved
+separately for each encoder. Denoising, segmentation and super-resolution heads
+are not used by Discover.
+
+Discover runs inference with fixed weights. Preparation, relevance reviews and
+class assignments do not train or fine-tune the model. Dataset exports provide
+crops and reviewed pairs for an external training pipeline; a compatible changed
+backbone requires a new preparation run. Retrieval scores describe appearance
+similarity and are not biological identities or calibrated probabilities.

@@ -13,7 +13,7 @@ from qtpy.QtGui import QDesktopServices, QIcon
 from qtpy.QtWidgets import (
     QAbstractItemView, QComboBox, QFileDialog, QFileSystemModel, QHBoxLayout,
     QLabel, QLineEdit, QListView, QMenu, QPushButton, QSlider, QSplitter,
-    QStackedWidget, QStyledItemDelegate, QTabBar, QTableView, QTreeView, QVBoxLayout, QWidget,
+    QStackedWidget, QStyledItemDelegate, QTabBar, QTabWidget, QTableView, QTreeView, QVBoxLayout, QWidget,
 )
 from ._library import (DEFAULT_ROOT, TIFF_SUFFIXES, FolderIndex, build_preview, scan_images,
                        migrate_index, capabilities, MICROSCOPY_SUFFIXES)
@@ -131,7 +131,12 @@ class BrowserAssistantWidget(QWidget):
         QTimer.singleShot(0, self._restore)
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        self.main_tabs = QTabWidget()
+        outer.addWidget(self.main_tabs)
+        library_page = QWidget()
+        layout = QVBoxLayout(library_page)
+        self.main_tabs.addTab(library_page, 'Library')
         heading = QLabel('Image Library')
         heading.setStyleSheet('font-size: 20px; font-weight: bold')
         layout.addWidget(heading)
@@ -262,7 +267,19 @@ class BrowserAssistantWidget(QWidget):
         self._visible_timer.setInterval(80)
         self._visible_timer.timeout.connect(self._schedule_visible)
         self._set_thumbnail_size(self._initial_thumbnail_size)
+        from ._discover_widget import DiscoverWidget
+        self.discover = DiscoverWidget(self)
+        self.main_tabs.addTab(self.discover, 'Discover')
+        from ._metadata_widget import MetadataWidget
+        self.metadata_tab = MetadataWidget(self)
+        self.main_tabs.addTab(self.metadata_tab, 'Metadata')
+        self.main_tabs.currentChanged.connect(self._queue_visible)
         self.setMinimumWidth(500)
+
+    def closeEvent(self, event):
+        if hasattr(self, "discover"):
+            self.discover.cancel_work()
+        super().closeEvent(event)
 
     def _button(self, text, callback):
         button = QPushButton(text)
@@ -477,6 +494,8 @@ class BrowserAssistantWidget(QWidget):
                 yield self._entries[idx.data(ROLE_PATH)]
 
     def _schedule_visible(self):
+        if self.main_tabs.currentWidget() is self.discover:
+            return
         if self._scanning:
             return
         active = sum(context[0] == 'preview' for context in self._tasks.values())
@@ -591,6 +610,11 @@ class BrowserAssistantWidget(QWidget):
                     for layer in layers or []:
                         layer.editable = False
                     warnings.append(f'{Path(path).name}: Zarr labels opened read-only')
+                if role == 'image':
+                    for image_index, layer in enumerate(layers or []):
+                        if hasattr(layer, 'metadata'):
+                            layer.metadata['browser_source'] = {'path': str(Path(path).resolve()),
+                                                                'image_index': image_index}
                 opened[key] = layers or []
                 self.settings.setValue('last_open_file', path)
                 return opened[key]
@@ -613,6 +637,7 @@ class BrowserAssistantWidget(QWidget):
                 open_one(path, 'image')
         summary = f'Opened {len(opened)} file(s).' if paths else 'Select files to open.'
         self.status_label.setText('\n'.join([summary] + errors + warnings))
+        return opened
 
     def _update_mask_controls(self, *_):
         if not hasattr(self, 'selection'):
@@ -689,7 +714,14 @@ class BrowserAssistantWidget(QWidget):
         try:
             # Resolve/validate all records before adding any layers. Arrays stay lazy.
             records = read_dataset(path, include_annotations=True)
+            image_index = 0
             for data, metadata, kind in records:
+                if kind == 'image':
+                    metadata = dict(metadata)
+                    metadata['metadata'] = dict(metadata.get('metadata', {}))
+                    metadata['metadata']['browser_source'] = {'path': str(Path(path).resolve()),
+                                                              'image_index': image_index}
+                    image_index += 1
                 layer = getattr(self.viewer, 'add_' + kind)(data, **metadata)
                 if kind == 'labels':
                     layer.editable = False

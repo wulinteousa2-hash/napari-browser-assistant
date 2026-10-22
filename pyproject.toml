@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "napari-browser-assistant"
-version = "1.0.0"
+version = "1.0.1"
 description = "Search and browse image libraries in napari with mask pairing, cached galleries, and lazy OME-Zarr workspace I/O."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -35,6 +35,9 @@ classifiers = [
 [project.optional-dependencies]
 ome-zarr = ["zarr>=3; python_version >= '3.11'", "zarr>=2.16,<3; python_version < '3.11'"]
 test = ["pytest"]
+discover = ["zarr>=3; python_version >= '3.11'", "zarr>=2.16,<3; python_version < '3.11'"]
+encoders = ["torch>=2.1", "torchvision", "safetensors"]
+em-dino = ["omniem; python_version >= '3.10'"]
 
 [project.urls]
 Homepage = "https://github.com/wulinteousa2-hash/napari-browser-assistant"
